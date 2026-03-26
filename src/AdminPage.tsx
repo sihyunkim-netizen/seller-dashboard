@@ -5,67 +5,87 @@ import './Admin.css'
 type Project = {
   key: string
   name: string
+  channelName: string
+  product: string
   startDate: string
   endDate: string
   partnerId: string
   gids: string
-  createdAt: string
+  manager?: string
 }
 
-const STORAGE_KEY = 'seller_dashboard_projects'
-
-function loadProjects(): Project[] {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')
-  } catch {
-    return []
-  }
+type SellerGroup = {
+  partnerId: string
+  channelName: string
+  latestDate: string
+  projects: Project[]
 }
 
-function saveProjects(projects: Project[]) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(projects))
-}
-
-function makeKey(partnerId: string, startDate: string, endDate: string) {
-  return `${partnerId}_${startDate}_${endDate}`
-}
+const PAGE_SIZE = 8
 
 export default function AdminPage() {
   const navigate = useNavigate()
   const [projects, setProjects] = useState<Project[]>([])
-  const [form, setForm] = useState({ name: '', startDate: '', endDate: '', partnerId: '', gids: '' })
+  const [loadingProjects, setLoadingProjects] = useState(true)
   const [updateStatus, setUpdateStatus] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({})
+  const [search, setSearch] = useState('')
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
+  const [page, setPage] = useState(1)
 
   useEffect(() => {
-    setProjects(loadProjects())
+    fetch('http://localhost:3001/api/projects')
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) setProjects(data.projects)
+        setLoadingProjects(false)
+      })
+      .catch(() => setLoadingProjects(false))
   }, [])
 
-  function handleAdd(e: React.FormEvent) {
-    e.preventDefault()
-    const { name, startDate, endDate, partnerId, gids } = form
-    if (!name || !startDate || !endDate || !partnerId || !gids) return
+  // 파트너ID 기준 그룹핑 + 최근 진행순 정렬
+  const sellerGroups: SellerGroup[] = Object.values(
+    projects.reduce((acc, p) => {
+      if (!acc[p.partnerId]) {
+        acc[p.partnerId] = {
+          partnerId: p.partnerId,
+          channelName: p.channelName,
+          latestDate: p.startDate,
+          projects: [],
+        }
+      }
+      if (p.startDate > acc[p.partnerId].latestDate) {
+        acc[p.partnerId].latestDate = p.startDate
+      }
+      acc[p.partnerId].projects.push(p)
+      return acc
+    }, {} as Record<string, SellerGroup>)
+  ).sort((a, b) => b.latestDate.localeCompare(a.latestDate))
 
-    const key = makeKey(partnerId, startDate, endDate)
-    const newProject: Project = {
-      key,
-      name,
-      startDate,
-      endDate,
-      partnerId,
-      gids,
-      createdAt: new Date().toISOString(),
-    }
+  // 각 그룹 내 프로젝트도 최근 순 정렬
+  sellerGroups.forEach(g => {
+    g.projects.sort((a, b) => b.startDate.localeCompare(a.startDate))
+  })
 
-    const updated = [newProject, ...projects.filter(p => p.key !== key)]
-    setProjects(updated)
-    saveProjects(updated)
-    setForm({ name: '', startDate: '', endDate: '', partnerId: '', gids: '' })
-  }
+  const today = new Date().toISOString().slice(0, 10)
 
-  function handleDelete(key: string) {
-    const updated = projects.filter(p => p.key !== key)
-    setProjects(updated)
-    saveProjects(updated)
+  // 현재 진행중인 셀러: 오늘 날짜가 startDate~endDate 사이인 프로젝트가 있는 그룹
+  const activeGroups = sellerGroups
+    .map(g => ({
+      ...g,
+      activeProjects: g.projects.filter(p => p.startDate <= today && today <= p.endDate),
+    }))
+    .filter(g => g.activeProjects.length > 0)
+
+  const filteredGroups = sellerGroups.filter(g =>
+    g.channelName.toLowerCase().includes(search.toLowerCase()) ||
+    g.partnerId.includes(search)
+  )
+
+  const totalPages = Math.ceil(filteredGroups.length / PAGE_SIZE)
+  const pagedGroups = filteredGroups.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
+
+  function toggleGroup(partnerId: string) {
+    setOpenGroups(s => ({ ...s, [partnerId]: !s[partnerId] }))
   }
 
   async function handleUpdate(project: Project) {
@@ -79,6 +99,7 @@ export default function AdminPage() {
           endDate: project.endDate,
           partnerId: project.partnerId,
           gids: project.gids,
+          product: project.product,
         }),
       })
       const data = await res.json()
@@ -99,119 +120,168 @@ export default function AdminPage() {
     <div className="admin-page">
       <header className="admin-header">
         <h1>어드민</h1>
-        <p className="admin-sub">셀러 프로젝트를 관리하고 데이터를 업데이트해요</p>
+        <p className="admin-sub">공동구매 진행이력 시트에서 자동으로 불러옵니다</p>
       </header>
 
-      {/* 프로젝트 추가 폼 */}
-      <section className="admin-form-section">
-        <h2>+ 새 프로젝트 추가</h2>
-        <form className="admin-form" onSubmit={handleAdd}>
-          <div className="form-row">
-            <label>프로젝트명</label>
-            <input
-              type="text"
-              placeholder="예: 씨마크 3월 공동구매"
-              value={form.name}
-              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
-              required
-            />
+      {/* 현재 진행중 섹션 */}
+      <section className="admin-list-section">
+        <div className="admin-list-header">
+          <h2>현재 진행중 {!loadingProjects && activeGroups.length > 0 && <span className="active-badge">{activeGroups.length}명</span>}</h2>
+        </div>
+        {loadingProjects && <p className="admin-empty">불러오는 중...</p>}
+        {!loadingProjects && activeGroups.length === 0 && (
+          <p className="admin-empty">진행중인 셀러가 없습니다.</p>
+        )}
+        {!loadingProjects && activeGroups.length > 0 && (
+          <div className="project-list">
+            {activeGroups.map(g => {
+              const latestProject = g.projects[0]
+              return (
+                <div key={g.partnerId} className="seller-group">
+                  <div className="seller-group-header">
+                    <div className="toggle-group-btn" style={{ cursor: 'default' }}>
+                      <span className="seller-channel">{g.channelName}</span>
+                      <span className="seller-meta">파트너ID: {g.partnerId}</span>
+                    </div>
+                    <button
+                      className="btn-dashboard"
+                      onClick={() => navigate(`/?key=${latestProject.key}`)}
+                    >
+                      대시보드
+                    </button>
+                  </div>
+                  {g.activeProjects.map(p => {
+                    const status = updateStatus[p.key] || 'idle'
+                    const hasGid = !!p.gids
+                    return (
+                      <div key={p.key} className="project-card">
+                        <div className="project-info">
+                          <div className="project-name">{p.product}</div>
+                          <div className="project-meta">
+                            {p.startDate} ~ {p.endDate}
+                            {p.manager && ` · 담당: ${p.manager}`}
+                            {!hasGid && <span className="no-gid"> · GID 없음</span>}
+                          </div>
+                        </div>
+                        <div className="project-actions">
+                          <button
+                            className={`btn-update ${hasGid ? status : 'disabled'}`}
+                            onClick={() => hasGid && handleUpdate(p)}
+                            disabled={!hasGid || status === 'loading'}
+                            title={!hasGid ? 'GID가 없어서 업데이트할 수 없어요' : ''}
+                          >
+                            {!hasGid && 'GID 없음'}
+                            {hasGid && status === 'idle' && '데이터 업데이트'}
+                            {hasGid && status === 'loading' && '업데이트 중...'}
+                            {hasGid && status === 'ok' && '완료'}
+                            {hasGid && status === 'error' && '실패 (서버 확인)'}
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )
+            })}
           </div>
-          <div className="form-row two-col">
-            <div>
-              <label>시작일</label>
-              <input
-                type="date"
-                value={form.startDate}
-                onChange={e => setForm(f => ({ ...f, startDate: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <label>종료일</label>
-              <input
-                type="date"
-                value={form.endDate}
-                onChange={e => setForm(f => ({ ...f, endDate: e.target.value }))}
-                required
-              />
-            </div>
-          </div>
-          <div className="form-row two-col">
-            <div>
-              <label>파트너 ID</label>
-              <input
-                type="text"
-                placeholder="예: 147150"
-                value={form.partnerId}
-                onChange={e => setForm(f => ({ ...f, partnerId: e.target.value }))}
-                required
-              />
-            </div>
-            <div>
-              <label>GID 목록</label>
-              <input
-                type="text"
-                placeholder="예: 2680698,2705226"
-                value={form.gids}
-                onChange={e => setForm(f => ({ ...f, gids: e.target.value }))}
-                required
-              />
-            </div>
-          </div>
-          <button type="submit" className="btn-primary">저장</button>
-        </form>
+        )}
       </section>
 
-      {/* 프로젝트 목록 */}
       <section className="admin-list-section">
-        <h2>셀러 프로젝트 목록</h2>
-        {projects.length === 0 && (
-          <p className="admin-empty">아직 추가된 프로젝트가 없어요.</p>
+        <div className="admin-list-header">
+          <h2>셀러 관리 {!loadingProjects && `(${filteredGroups.length}명)`}</h2>
+          <input
+            className="search-input"
+            type="text"
+            placeholder="채널명 · 파트너ID 검색"
+            value={search}
+            onChange={e => { setSearch(e.target.value); setPage(1) }}
+          />
+        </div>
+
+        {loadingProjects && <p className="admin-empty">불러오는 중...</p>}
+        {!loadingProjects && filteredGroups.length === 0 && (
+          <p className="admin-empty">결과가 없어요.</p>
         )}
+
         <div className="project-list">
-          {projects.map(p => {
-            const status = updateStatus[p.key] || 'idle'
+          {pagedGroups.map(g => {
+            const isOpen = !!openGroups[g.partnerId]
+            const latestProject = g.projects[0]
             return (
-              <div key={p.key} className="project-card">
-                <div className="project-info">
-                  <div className="project-name">{p.name}</div>
-                  <div className="project-meta">
-                    {p.startDate} ~ {p.endDate} · 파트너ID: {p.partnerId} · GID: {p.gids}
-                  </div>
-                </div>
-                <div className="project-actions">
-                  <button
-                    className={`btn-update ${status}`}
-                    onClick={() => handleUpdate(p)}
-                    disabled={status === 'loading'}
-                  >
-                    {status === 'idle' && '데이터 업데이트'}
-                    {status === 'loading' && '업데이트 중...'}
-                    {status === 'ok' && '완료'}
-                    {status === 'error' && '실패 (서버 확인)'}
+              <div key={g.partnerId} className="seller-group">
+                {/* 셀러 헤더 */}
+                <div className="seller-group-header">
+                  <button className="toggle-group-btn" onClick={() => toggleGroup(g.partnerId)}>
+                    <span className="seller-channel">{g.channelName}</span>
+                    <span className="seller-meta">파트너ID: {g.partnerId} · {g.projects.length}개 공구</span>
+                    <span className="toggle-icon">{isOpen ? '▲' : '▼'}</span>
                   </button>
                   <button
                     className="btn-dashboard"
-                    onClick={() => navigate(`/?key=${p.key}`)}
+                    onClick={() => navigate(`/?key=${latestProject.key}`)}
                   >
                     대시보드
                   </button>
-                  <button
-                    className="btn-delete"
-                    onClick={() => handleDelete(p.key)}
-                  >
-                    삭제
-                  </button>
                 </div>
+
+                {/* 프로젝트 토글 목록 */}
+                {isOpen && g.projects.map(p => {
+                  const status = updateStatus[p.key] || 'idle'
+                  const hasGid = !!p.gids
+                  return (
+                    <div key={p.key} className="project-card">
+                      <div className="project-info">
+                        <div className="project-name">{p.product}</div>
+                        <div className="project-meta">
+                          {p.startDate} ~ {p.endDate}
+                          {p.manager && ` · 담당: ${p.manager}`}
+                          {!hasGid && <span className="no-gid"> · GID 없음</span>}
+                        </div>
+                      </div>
+                      <div className="project-actions">
+                        <button
+                          className={`btn-update ${hasGid ? status : 'disabled'}`}
+                          onClick={() => hasGid && handleUpdate(p)}
+                          disabled={!hasGid || status === 'loading'}
+                          title={!hasGid ? 'GID가 없어서 업데이트할 수 없어요' : ''}
+                        >
+                          {!hasGid && 'GID 없음'}
+                          {hasGid && status === 'idle' && '데이터 업데이트'}
+                          {hasGid && status === 'loading' && '업데이트 중...'}
+                          {hasGid && status === 'ok' && '완료'}
+                          {hasGid && status === 'error' && '실패 (서버 확인)'}
+                        </button>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             )
           })}
         </div>
+
+        {/* 페이지네이션 */}
+        {totalPages > 1 && (
+          <div className="pagination">
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>이전</button>
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map(n => (
+              <button
+                key={n}
+                className={page === n ? 'active' : ''}
+                onClick={() => setPage(n)}
+              >
+                {n}
+              </button>
+            ))}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages}>다음</button>
+          </div>
+        )}
       </section>
 
-      {/* 서버 안내 */}
       <div className="admin-notice">
-        데이터 업데이트 버튼은 VPN 연결 상태에서 <code>node scripts/server.cjs</code> 서버가 실행 중이어야 해요.
+        VPN 연결 상태에서 <code>node scripts/server.cjs</code> 실행 후 사용하세요.
+        목록은 <a href="https://docs.google.com/spreadsheets/d/18rKTPqCA560cDkx-4jltuV22byBDnNuTbwkDfe_9ozk" target="_blank" rel="noreferrer">공동구매 진행이력 시트</a>에서 관리해요.
       </div>
     </div>
   )

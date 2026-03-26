@@ -37,66 +37,23 @@ type DashboardData = {
 
 const OPTION_COLORS = ['#6366f1', '#f59e0b', '#10b981', '#ef4444', '#3b82f6', '#ec4899', '#8b5cf6']
 
-const historyData = [
-  {
-    id: 0,
-    name: '제주 5박6일 패키지',
-    period: '2026.03.11 ~ 2026.03.18',
-    status: 'live' as const,
-    예약건수: 76,
-    거래액: 9880000,
-    취소율: 4.2,
-    전환율: 9.5,
-    크로스셀: [
-      { name: '제주 렌터카', 예약건수: 18, 거래액: 1980000 },
-      { name: '한라산 투어', 예약건수: 11, 거래액: 660000 },
-      { name: '성산일출봉 입장권', 예약건수: 24, 거래액: 384000 },
-    ],
-  },
-  {
-    id: 1,
-    name: '제주 3박4일 패키지',
-    period: '2026.02.10 ~ 2026.02.17',
-    status: 'done' as const,
-    예약건수: 89,
-    거래액: 13500000,
-    취소율: 3.4,
-    전환율: 11.2,
-    크로스셀: [
-      { name: '제주 렌터카', 예약건수: 22, 거래액: 2420000 },
-      { name: '우도 투어', 예약건수: 15, 거래액: 750000 },
-    ],
-  },
-  {
-    id: 2,
-    name: '오사카 항공권 특가',
-    period: '2026.01.20 ~ 2026.01.27',
-    status: 'done' as const,
-    예약건수: 62,
-    거래액: 9200000,
-    취소율: 5.1,
-    전환율: 8.7,
-    크로스셀: [
-      { name: '오사카 JR패스', 예약건수: 31, 거래액: 2790000 },
-      { name: '유니버셜 스튜디오 입장권', 예약건수: 19, 거래액: 2470000 },
-      { name: '도톤보리 맛집 투어', 예약건수: 8, 거래액: 480000 },
-    ],
-  },
-  {
-    id: 3,
-    name: '방콕 자유여행',
-    period: '2025.12.01 ~ 2025.12.08',
-    status: 'done' as const,
-    예약건수: 41,
-    거래액: 6100000,
-    취소율: 6.2,
-    전환율: 6.3,
-    크로스셀: [
-      { name: '방콕 시내 투어', 예약건수: 14, 거래액: 840000 },
-      { name: '아유타야 당일치기', 예약건수: 9, 거래액: 675000 },
-    ],
-  },
-]
+type PartnerIndex = {
+  partnerId: string
+  partnerName: string
+  projects: {
+    key: string
+    product: string
+    startDate: string
+    endDate: string
+    updatedAt: string
+    kpi: DashboardData['kpi']
+  }[]
+}
+
+type PartnerManifest = {
+  partnerId: string
+  projects: { key: string; product: string; startDate: string; endDate: string }[]
+}
 
 // ─── 공통 컴포넌트 ────────────────────────────────────────────────
 
@@ -252,82 +209,80 @@ function MainTab({ data }: { data: DashboardData }) {
 
 // ─── 누적 탭 ─────────────────────────────────────────────────────
 
-function HistoryTab() {
-  const [openId, setOpenId] = useState<number | null>(null)
+function HistoryTab({ partnerId, currentKey }: { partnerId: string; currentKey: string }) {
+  const [index, setIndex] = useState<PartnerIndex | null>(null)
+  const [manifest, setManifest] = useState<PartnerManifest | null>(null)
+
+  useEffect(() => {
+    fetch(`/data/${partnerId}.index.json`).then(r => r.json()).then(setIndex).catch(() => {})
+    fetch(`/data/${partnerId}.manifest.json`).then(r => r.json()).then(setManifest).catch(() => {})
+  }, [partnerId])
+
+  // manifest 기준 전체 프로젝트, 없으면 index 기준
+  const allProjects = manifest?.projects ?? (index?.projects ?? [])
+  const indexMap = new Map(index?.projects.map(p => [p.key, p]) ?? [])
+
+  // manifest에 현재 프로젝트도 없으면 추가
+  const projectKeys = new Set(allProjects.map(p => p.key))
+  const extraCurrent = currentKey && !projectKeys.has(currentKey)
+    ? [{ key: currentKey, product: '', startDate: currentKey.split('_')[1] ?? '', endDate: currentKey.split('_')[2] ?? '' }]
+    : []
+  const allSorted = [...extraCurrent, ...allProjects].sort((a, b) => b.startDate.localeCompare(a.startDate))
 
   return (
     <>
       <div className="section-title">지금까지 진행한 공동구매</div>
 
       <div className="history-list">
-        {historyData.map((item) => (
-          <div key={item.id} className="history-card">
-            <div className="history-header">
-              <div>
-                <div className="history-name">
-                  {item.name}
-                  {item.status === 'live' && <span className="live-inline">● LIVE</span>}
+        {allSorted.map(p => {
+          const indexed = indexMap.get(p.key)
+          return (
+            <div key={p.key} className={`history-card${indexed ? '' : ' history-card-nodata'}`}>
+              <div className="history-header">
+                <div>
+                  <div className="history-name" style={indexed ? {} : { color: '#9ca3af' }}>
+                    {p.product || p.key}
+                    {p.key === currentKey && indexed && <span className="live-inline">● 현재</span>}
+                  </div>
+                  <div className="history-period">{p.startDate} ~ {p.endDate}</div>
                 </div>
-                <div className="history-period">{item.period}</div>
+                {indexed && (
+                  <div className="history-right">
+                    <span style={{ fontSize: 12, color: '#9ca3af' }}>
+                      업데이트 {new Date(indexed.updatedAt).toLocaleDateString('ko-KR')}
+                    </span>
+                  </div>
+                )}
               </div>
-              <div className="history-right">
-                <span className="history-content-count">크로스셀 {item.크로스셀.length}건</span>
-                <button
-                  className="toggle-btn"
-                  onClick={() => setOpenId(openId === item.id ? null : item.id)}
-                >
-                  {openId === item.id ? '접기 ▲' : '크로스셀 상품 ▼'}
-                </button>
-              </div>
+              {indexed ? (
+                <div className="history-stats">
+                  <div className="history-stat">
+                    <div className="stat-label">총 예약건수</div>
+                    <div className="stat-value">{indexed.kpi.총예약건수}건</div>
+                  </div>
+                  <div className="history-stat">
+                    <div className="stat-label">총 거래액</div>
+                    <div className="stat-value">₩{indexed.kpi.총거래액.toLocaleString()}</div>
+                  </div>
+                  <div className="history-stat">
+                    <div className="stat-label">취소율</div>
+                    <div className="stat-value">{indexed.kpi.취소율}%</div>
+                  </div>
+                  <div className="history-stat">
+                    <div className="stat-label">확정건수</div>
+                    <div className="stat-value">{indexed.kpi.확정건수}건</div>
+                  </div>
+                  <div className="history-stat">
+                    <div className="stat-label">정산예정금액</div>
+                    <div className="stat-value settle">₩{indexed.kpi.정산예정금액.toLocaleString()}</div>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ fontSize: 13, color: '#9ca3af', padding: '8px 0' }}>데이터 업데이트 필요</div>
+              )}
             </div>
-
-            <div className="history-stats">
-              <div className="history-stat">
-                <div className="stat-label">총 예약건수</div>
-                <div className="stat-value">{item.예약건수}건</div>
-              </div>
-              <div className="history-stat">
-                <div className="stat-label">총 거래액</div>
-                <div className="stat-value">₩{item.거래액.toLocaleString()}</div>
-              </div>
-              <div className="history-stat">
-                <div className="stat-label">취소율</div>
-                <div className="stat-value">{item.취소율}%</div>
-              </div>
-              <div className="history-stat">
-                <div className="stat-label">전환율</div>
-                <div className="stat-value">{item.전환율}%</div>
-              </div>
-              <div className="history-stat">
-                <div className="stat-label">정산예정금액</div>
-                <div className="stat-value settle">₩{Math.round(item.거래액 * 0.02).toLocaleString()}</div>
-              </div>
-            </div>
-
-            {openId === item.id && (
-              <div className="content-insights">
-                <table className="mylink-table">
-                  <thead>
-                    <tr>
-                      <th>크로스셀 상품</th>
-                      <th>예약건수</th>
-                      <th>총 거래액</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {item.크로스셀.map((c) => (
-                      <tr key={c.name}>
-                        <td>{c.name}</td>
-                        <td>{c.예약건수}건</td>
-                        <td>₩{c.거래액.toLocaleString()}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* 광매플 랜딩 */}
@@ -336,7 +291,7 @@ function HistoryTab() {
           <div className="gwangmaepl-title">다음 공동구매도 함께 해요!</div>
           <div className="gwangmaepl-sub">셀러 신청하고 더 많은 기회를 잡아보세요.</div>
         </div>
-        <a className="gwangmaepl-btn" href="#" target="_blank" rel="noreferrer">
+        <a className="gwangmaepl-btn" href="https://myrealtrip-admatchplus.softr.app/market" target="_blank" rel="noreferrer">
           셀러 신청하기 →
         </a>
       </div>
@@ -403,12 +358,6 @@ function App() {
           <h1>공동구매 셀러 대시보드</h1>
           <p className="partner-info">파트너 ID: {dashboardData?.partner?.id ?? '-'} · {dashboardData?.partner?.name ?? '-'}</p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <Link to="/admin" style={{ fontSize: '13px', color: '#6b7280', textDecoration: 'none' }}>
-            어드민
-          </Link>
-          <div className="live-badge">● LIVE</div>
-        </div>
       </header>
 
       <div className="tabs">
@@ -428,7 +377,12 @@ function App() {
 
       {loading && <div style={{ padding: '40px', textAlign: 'center', color: '#6b7280' }}>데이터 불러오는 중...</div>}
       {!loading && dashboardData && activeTab === 'main' && <MainTab data={dashboardData} />}
-      {!loading && activeTab === 'history' && <HistoryTab />}
+      {!loading && activeTab === 'history' && (
+        <HistoryTab
+          partnerId={projectKey?.split('_')[0] ?? ''}
+          currentKey={projectKey ?? ''}
+        />
+      )}
       {!loading && !dashboardData && <div style={{ padding: '40px', textAlign: 'center', color: '#ef4444' }}>데이터를 불러오지 못했어요.</div>}
     </div>
   )

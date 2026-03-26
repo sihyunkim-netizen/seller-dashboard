@@ -36,12 +36,12 @@ const REDASH_API_KEY = process.env.REDASH_API_KEY
 // CSV 없이: node update-data.cjs startDate endDate partnerId gids
 // CSV 있을 때: node update-data.cjs csvPath startDate endDate partnerId gids
 const args = process.argv.slice(2)
-let csvPath, startDate, endDate, partnerId, gidArg
+let csvPath, startDate, endDate, partnerId, gidArg, productName
 
 if (args[0] && args[0].endsWith('.csv')) {
-  ;[csvPath, startDate, endDate, partnerId, gidArg] = args
+  ;[csvPath, startDate, endDate, partnerId, gidArg, productName] = args
 } else {
-  ;[startDate, endDate, partnerId, gidArg] = args
+  ;[startDate, endDate, partnerId, gidArg, productName] = args
 }
 
 if (!startDate || !endDate || !partnerId || !gidArg) {
@@ -50,7 +50,7 @@ if (!startDate || !endDate || !partnerId || !gidArg) {
   process.exit(1)
 }
 
-const GID_LIST = gidArg.split(',').map(g => g.trim())
+const GID_LIST = gidArg.split(',').map(g => g.trim()).filter(Boolean)
 
 // ─── Redash API 호출 ─────────────────────────────────────────────
 function httpsRequest(options, body) {
@@ -254,10 +254,37 @@ async function main() {
   fs.writeFileSync(outputPath, JSON.stringify(output, null, 2))
   console.log(`✅ 저장 완료: public/data/${projectKey}.json`)
 
+  // ─── 파트너 인덱스 업데이트 ──────────────────────────────────
+  const indexPath = path.join(DATA_DIR, `${partnerId}.index.json`)
+  let index = { partnerId, partnerName: output.partner.name, projects: [] }
+  if (fs.existsSync(indexPath)) {
+    index = JSON.parse(fs.readFileSync(indexPath))
+  }
+  const projEntry = {
+    key: projectKey,
+    product: productName || '',
+    startDate,
+    endDate,
+    updatedAt: output.updatedAt,
+    kpi: output.kpi,
+  }
+  const existingIdx = index.projects.findIndex(p => p.key === projectKey)
+  if (existingIdx >= 0) {
+    index.projects[existingIdx] = projEntry
+  } else {
+    index.projects.push(projEntry)
+  }
+  index.projects.sort((a, b) => b.startDate.localeCompare(a.startDate))
+  fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
+  console.log(`✅ 인덱스 업데이트: public/data/${partnerId}.index.json`)
+
   // ─── git commit + push ────────────────────────────────────────
   const rootPath = path.join(__dirname, '..')
   try {
-    execSync(`git add public/data/${projectKey}.json`, { cwd: rootPath })
+    const filesToAdd = [`public/data/${projectKey}.json`, `public/data/${partnerId}.index.json`]
+    const manifestPath = path.join(DATA_DIR, `${partnerId}.manifest.json`)
+    if (fs.existsSync(manifestPath)) filesToAdd.push(`public/data/${partnerId}.manifest.json`)
+    execSync(`git add ${filesToAdd.join(' ')}`, { cwd: rootPath })
     execSync(`git commit -m "data: update ${projectKey}"`, { cwd: rootPath })
     execSync('git push', { cwd: rootPath })
     console.log('✅ GitHub 푸시 완료 → Vercel 자동 배포 시작')
