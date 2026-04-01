@@ -28,6 +28,9 @@ export default function AdminPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loadingProjects, setLoadingProjects] = useState(true)
   const [updateStatus, setUpdateStatus] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({})
+  const [updateTimes, setUpdateTimes] = useState<Record<string, string>>(() => {
+    try { return JSON.parse(localStorage.getItem('updateTimes') || '{}') } catch { return {} }
+  })
   const [search, setSearch] = useState('')
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [page, setPage] = useState(1)
@@ -105,6 +108,14 @@ export default function AdminPage() {
       const data = await res.json()
       if (data.ok) {
         setUpdateStatus(s => ({ ...s, [project.key]: 'ok' }))
+        setUpdateTimes(s => {
+          const now = new Date()
+          const pad = (n: number) => String(n).padStart(2, '0')
+          const timeStr = `${now.toLocaleDateString('ko-KR')} ${pad(now.getHours())}:${pad(now.getMinutes())}`
+          const next = { ...s, [project.key]: timeStr }
+          localStorage.setItem('updateTimes', JSON.stringify(next))
+          return next
+        })
         setTimeout(() => setUpdateStatus(s => ({ ...s, [project.key]: 'idle' })), 3000)
       } else {
         throw new Error(data.error)
@@ -176,6 +187,9 @@ export default function AdminPage() {
                             {hasGid && status === 'ok' && '완료'}
                             {hasGid && status === 'error' && '실패 (서버 확인)'}
                           </button>
+                          {updateTimes[p.key] && (
+                            <div className="update-time">{updateTimes[p.key]}</div>
+                          )}
                         </div>
                       </div>
                     )
@@ -252,6 +266,9 @@ export default function AdminPage() {
                           {hasGid && status === 'ok' && '완료'}
                           {hasGid && status === 'error' && '실패 (서버 확인)'}
                         </button>
+                        {updateTimes[p.key] && (
+                          <div className="update-time">{updateTimes[p.key]}</div>
+                        )}
                       </div>
                     </div>
                   )

@@ -17,7 +17,7 @@ const https = require('https')
 const { execSync } = require('child_process')
 
 const DATA_DIR = path.join(__dirname, '../public/data')
-const REDASH_QUERY_ID = 23544
+const REDASH_QUERY_ID = 32951
 
 // public/data 디렉토리 없으면 생성
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true })
@@ -72,7 +72,7 @@ async function fetchFromRedash() {
   console.log('Redash에서 데이터 가져오는 중...')
   const payload = JSON.stringify({
     parameters: { start_date: startDate, end_date: endDate },
-    max_age: 0,
+    max_age: 0,  // 항상 최신 데이터 (실시간 스트림)
   })
 
   const postRes = await httpsRequest({
@@ -154,7 +154,6 @@ function aggregate(allRows) {
 
   const totalGMV = rows.reduce((s, r) => s + (parseFloat(r.SALES_KRW_PRICE) || 0), 0)
   const confirmedGMV = confirmed.reduce((s, r) => s + (parseFloat(r.SALES_KRW_PRICE) || 0), 0)
-  const totalCommission = confirmed.reduce((s, r) => s + (parseFloat(r.partnership_commission) || 0), 0)
   const cancelRate = rows.length > 0 ? parseFloat((cancelled.length / rows.length * 100).toFixed(1)) : 0
 
   const optMap = {}
@@ -193,7 +192,20 @@ function aggregate(allRows) {
     .sort()
     .map(([date, v]) => ({ date, 예약건수: v.예약건수, 거래액: Math.round(v.거래액) }))
 
-  return { rows, confirmed, cancelled, totalGMV, confirmedGMV, totalCommission, cancelRate, options, links, daily, partnerName }
+  const hourMap = {}
+  rows.forEach(r => {
+    if (!r.CREATED_AT) return
+    const h = r.CREATED_AT.slice(0, 13) // "2026-03-23T14"
+    const label = h.replace('T', ' ') + ':00'
+    if (!hourMap[label]) hourMap[label] = { 예약건수: 0, 거래액: 0 }
+    hourMap[label].예약건수++
+    hourMap[label].거래액 += parseFloat(r.SALES_KRW_PRICE) || 0
+  })
+  const hourly = Object.entries(hourMap)
+    .sort()
+    .map(([hour, v]) => ({ hour, 예약건수: v.예약건수, 거래액: Math.round(v.거래액) }))
+
+  return { rows, confirmed, cancelled, totalGMV, confirmedGMV, cancelRate, options, links, daily, hourly, partnerName }
 }
 
 // ─── 메인 ────────────────────────────────────────────────────────
@@ -216,18 +228,18 @@ async function main() {
     const redashRows = await fetchFromRedash()
     allRows = redashRows.map(r => ({
       partner_id: String(r.partner_id || ''),
-      name: r.name || '',
+      name: r.partner_name || '',
       GID: String(r.GID || ''),
-      PRODUCT_TITLE: r.PRODUCT_TITLE || '',
-      BASIS_DATE: (r.BASIS_DATE || '').slice(0, 10),
-      RECENT_STATUS: r.RECENT_STATUS || '',
-      SALES_KRW_PRICE: r.SALES_KRW_PRICE || 0,
+      PRODUCT_TITLE: r.product_title || '',
+      BASIS_DATE: (r.basis_date || '').slice(0, 10),
+      CREATED_AT: r.created_at || '',
+      RECENT_STATUS: r.status || '',
+      SALES_KRW_PRICE: r.sale_price || 0,
       marketing_link_id: String(r.marketing_link_id || ''),
-      partnership_commission: r.partnership_commission || 0,
     }))
   }
 
-  const { rows, confirmed, cancelled, totalGMV, confirmedGMV, totalCommission, cancelRate, options, links, daily, partnerName } = aggregate(allRows)
+  const { rows, confirmed, cancelled, totalGMV, confirmedGMV, cancelRate, options, links, daily, hourly, partnerName } = aggregate(allRows)
 
   const projectKey = `${partnerId}_${startDate}_${endDate}`
 
@@ -235,6 +247,7 @@ async function main() {
     updatedAt: new Date().toISOString(),
     period: { start: startDate, end: endDate },
     partner: { id: partnerId, name: partnerName },
+    product: productName || '',
     kpi: {
       총예약건수: rows.length,
       확정건수: confirmed.length,
@@ -247,6 +260,7 @@ async function main() {
     options,
     links,
     daily,
+    hourly,
   }
 
   // ─── 파일 저장 ────────────────────────────────────────────────
@@ -278,10 +292,31 @@ async function main() {
   fs.writeFileSync(indexPath, JSON.stringify(index, null, 2))
   console.log(`✅ 인덱스 업데이트: public/data/${partnerId}.index.json`)
 
+  // ─── 전체 통계 업데이트 ──────────────────────────────────────
+  const allFiles = fs.readdirSync(DATA_DIR).filter(f => /^\d+_\d{4}-\d{2}-\d{2}_\d{4}-\d{2}-\d{2}\.json$/.test(f))
+  const cancelRates = [], firstDayCounts = []
+  for (const file of allFiles) {
+    try {
+      const d = JSON.parse(fs.readFileSync(path.join(DATA_DIR, file), 'utf8'))
+      if (d.kpi?.취소율 !== undefined) cancelRates.push(d.kpi.취소율)
+      if (d.daily?.[0]?.예약건수 !== undefined) firstDayCounts.push(d.daily[0].예약건수)
+    } catch {}
+  }
+  const avg = arr => arr.length > 0 ? parseFloat((arr.reduce((s, v) => s + v, 0) / arr.length).toFixed(1)) : null
+  const statsData = {
+    updatedAt: new Date().toISOString(),
+    count: allFiles.length,
+    avg취소율: avg(cancelRates),
+    avg첫날예약건수: avg(firstDayCounts),
+  }
+  const statsPath = path.join(DATA_DIR, '_stats.json')
+  fs.writeFileSync(statsPath, JSON.stringify(statsData, null, 2))
+  console.log(`✅ 전체 통계 업데이트: _stats.json (${allFiles.length}개 프로젝트)`)
+
   // ─── git commit + push ────────────────────────────────────────
   const rootPath = path.join(__dirname, '..')
   try {
-    const filesToAdd = [`public/data/${projectKey}.json`, `public/data/${partnerId}.index.json`]
+    const filesToAdd = [`public/data/${projectKey}.json`, `public/data/${partnerId}.index.json`, `public/data/_stats.json`]
     const manifestPath = path.join(DATA_DIR, `${partnerId}.manifest.json`)
     if (fs.existsSync(manifestPath)) filesToAdd.push(`public/data/${partnerId}.manifest.json`)
     execSync(`git add ${filesToAdd.join(' ')}`, { cwd: rootPath })

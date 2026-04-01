@@ -200,6 +200,13 @@
   cursor: not-allowed;
 }
 
+.update-time {
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: right;
+  line-height: 1.4;
+}
+
 .pagination {
   display: flex;
   justify-content: center;
@@ -273,7 +280,9 @@
 
 .project-actions {
   display: flex;
-  gap: 8px;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
   flex-shrink: 0;
 }
 
