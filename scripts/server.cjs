@@ -47,6 +47,16 @@ function parseCampaignDate(str, yearStr) {
       endMonth = startMonth
       endDay = Number(endPart)
     }
+  } else if (s.includes('.') && s.includes('~')) {
+    // "12.9~12.12" or "12.9~12.9"
+    const [startPart, endPart] = s.split('~')
+    const sp = startPart.split('.')
+    const ep = endPart.split('.')
+    if (sp.length < 2 || ep.length < 2) return { startDate: '', endDate: '' }
+    startMonth = Number(sp[0])
+    startDay = Number(sp[1])
+    endMonth = Number(ep[0])
+    endDay = Number(ep[1])
   } else if (s.includes('.')) {
     // "1.2-1.8" or "12.29-1.4"
     const parts = s.split('-')
@@ -115,16 +125,17 @@ async function fetchAllProjects() {
   return rows
     .map(row => {
       const partnerId = (row[6] || '').trim()
-      const channelName = (row[7] || '').trim()
-      const product = (row[8] || '').trim()
-      const yearStr = (row[9] || '').trim()
-      const campaignDate = (row[10] || '').trim()
-      const gid = (row[12] || '').trim()
+      const email = (row[7] || '').trim()
+      const channelName = (row[8] || '').trim()
+      const product = (row[9] || '').trim()
+      const yearStr = (row[10] || '').trim()
+      const campaignDate = (row[11] || '').trim()
+      const gid = (row[13] || '').trim()
       const manager = (row[0] || '').trim()
       const { startDate, endDate } = parseCampaignDate(campaignDate, yearStr)
       if (!partnerId || !startDate || !endDate) return null
       const key = `${partnerId}_${startDate}_${endDate}`
-      return { key, name: `${channelName} · ${product}`, channelName, product, startDate, endDate, partnerId, gids: gid, manager }
+      return { key, name: `${channelName} · ${product}`, channelName, product, startDate, endDate, partnerId, gids: gid, manager, email }
     })
     .filter(Boolean)
 }
