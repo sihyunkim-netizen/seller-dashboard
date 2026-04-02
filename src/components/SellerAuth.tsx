@@ -24,13 +24,10 @@ export default function SellerAuth({ children }: { children: React.ReactNode }) 
     setLoading(true)
     try {
       // 등록된 셀러 이메일인지 확인
-      const { data, error: fetchErr } = await supabase
-        .from('allowed_sellers')
-        .select('email')
-        .eq('email', email.toLowerCase().trim())
-        .maybeSingle()
+      const { data: allowed, error: rpcErr } = await supabase
+        .rpc('is_allowed_seller', { check_email: email.toLowerCase().trim() })
 
-      if (fetchErr || !data) {
+      if (rpcErr || !allowed) {
         setError('등록되지 않은 이메일이에요. 담당자에게 문의해주세요.')
         setLoading(false)
         return
