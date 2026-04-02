@@ -10,7 +10,6 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
 } from 'recharts'
 import './App.css'
@@ -92,7 +91,7 @@ type GlobalStats = {
 }
 
 function MainTab({ data, hideExtras }: { data: DashboardData; hideExtras?: boolean }) {
-  const { kpi, options, links, daily, hourly } = data
+  const { kpi, links, daily, hourly } = data
   const [stats, setStats] = useState<GlobalStats | null>(null)
 
   useEffect(() => {
@@ -158,20 +157,7 @@ function MainTab({ data, hideExtras }: { data: DashboardData; hideExtras?: boole
     actionMessages.push(`마감 임박 콘텐츠로 한정된 혜택임을 강조해보세요!`)
   }
 
-  // 첫날 예약이 전체의 70% 이상
-  if (kpi.총예약건수 > 0 && firstDayCount / kpi.총예약건수 >= 0.7) {
-    actionMessages.push(`첫날 예약이 전체의 70%를 차지하고 있어요. 오픈 효과 이후 추가 콘텐츠로 재점화가 필요한 시점이에요`)
-  }
 
-  // 취소율 평균 비교
-  if (stats?.avg취소율 != null) {
-    const diff = parseFloat((kpi.취소율 - stats.avg취소율).toFixed(1))
-    if (diff < 0) {
-      actionMessages.push(`평균치에 비해 ${Math.abs(diff)}%p 낮아요. 현재 전략을 유지하세요!`)
-    } else if (diff > 0) {
-      actionMessages.push(`평균치에 비해 ${diff}%p 높아요. 추가 콘텐츠 발행으로 새로운 예약을 받아보세요.`)
-    }
-  }
 
   // 첫날 예약 평균 비교
   if (stats?.avg첫날예약건수 != null && firstDayCount > stats.avg첫날예약건수) {
