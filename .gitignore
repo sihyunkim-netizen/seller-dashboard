@@ -24,6 +24,7 @@ dist-ssr
 *.sw?
 
 # 민감한 파일
+.env
 scripts/.env
 scripts/credentials.json
 scripts/token.json
