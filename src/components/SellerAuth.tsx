@@ -49,7 +49,7 @@ export default function SellerAuth({ children }: { children: React.ReactNode }) 
       const { error: verifyErr } = await supabase.auth.verifyOtp({
         email: email.toLowerCase().trim(),
         token: otp.trim(),
-        type: 'email',
+        type: 'magiclink',
       })
       if (verifyErr) throw verifyErr
     } catch {
