@@ -443,17 +443,8 @@ function App() {
             표시할 프로젝트가 없어요
           </div>
           <div style={{ fontSize: '14px', marginBottom: '24px' }}>
-            어드민 페이지에서 프로젝트를 선택해주세요
+            표시할 프로젝트가 없어요
           </div>
-          <Link
-            to="/admin"
-            style={{
-              background: '#6366f1', color: '#fff', padding: '10px 24px',
-              borderRadius: '8px', textDecoration: 'none', fontWeight: 600, fontSize: '14px',
-            }}
-          >
-            어드민 페이지로 이동
-          </Link>
         </div>
       </div>
     )
