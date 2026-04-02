@@ -49,7 +49,7 @@ export default function SellerAuth({ children }: { children: React.ReactNode }) 
       const { error: verifyErr } = await supabase.auth.verifyOtp({
         email: email.toLowerCase().trim(),
         token: otp.trim(),
-        type: 'magiclink',
+        type: 'email',
       })
       if (verifyErr) throw verifyErr
     } catch {
@@ -90,13 +90,13 @@ export default function SellerAuth({ children }: { children: React.ReactNode }) 
             <input
               style={inputStyle}
               type="text"
-              placeholder="000000"
-              maxLength={6}
+              placeholder="00000000"
+              maxLength={8}
               value={otp}
               onChange={e => setOtp(e.target.value.replace(/\D/g, ''))}
               onKeyDown={e => e.key === 'Enter' && handleVerifyOtp()}
             />
-            <button style={btnStyle} onClick={handleVerifyOtp} disabled={otp.length !== 6 || loading}>
+            <button style={btnStyle} onClick={handleVerifyOtp} disabled={otp.length !== 8 || loading}>
               {loading ? '확인 중...' : '입장하기'}
             </button>
             <button style={backStyle} onClick={() => { setStep('email'); setError(''); setOtp('') }}>
