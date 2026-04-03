@@ -83,6 +83,8 @@ function parseCampaignDate(str, yearStr) {
 const app = express()
 app.use(cors())
 app.use(express.json())
+app.use(express.static(path.join(__dirname, '..', 'dist')))
+
 
 const scriptPath = path.join(__dirname, 'update-data.cjs')
 const rootPath = path.join(__dirname, '..')
@@ -140,10 +142,18 @@ async function fetchAllProjects() {
     .filter(Boolean)
 }
 
-// 시트에서 프로젝트 목록 읽기
+// 시트에서 프로젝트 목록 읽고 static 파일로도 저장
+async function fetchAndSaveProjects() {
+  const projects = await fetchAllProjects()
+  const outPath = path.join(rootPath, 'public', 'data', 'projects.json')
+  fs.mkdirSync(path.join(rootPath, 'public', 'data'), { recursive: true })
+  fs.writeFileSync(outPath, JSON.stringify({ ok: true, projects }, null, 2))
+  return projects
+}
+
 app.get('/api/projects', async (req, res) => {
   try {
-    const projects = await fetchAllProjects()
+    const projects = await fetchAndSaveProjects()
     res.json({ ok: true, projects })
   } catch (err) {
     console.error(err.message)
@@ -151,7 +161,52 @@ app.get('/api/projects', async (req, res) => {
   }
 })
 
+// SPA 라우팅 - 모든 경로를 index.html로
+app.get('/{*path}', (req, res) => {
+  res.sendFile(path.join(__dirname, '..', 'dist', 'index.html'))
+})
+
+async function autoUpdate() {
+  const today = new Date().toISOString().slice(0, 10)
+  let projects
+  try {
+    projects = await fetchAllProjects()
+  } catch (err) {
+    console.error('[자동업데이트] 시트 읽기 실패:', err.message)
+    return
+  }
+  const active = projects.filter(p => p.startDate <= today && today <= p.endDate && p.gids)
+  if (active.length === 0) {
+    console.log('[자동업데이트] 진행중인 공구 없음')
+    return
+  }
+  console.log(`[자동업데이트] ${active.length}개 공구 업데이트 시작`)
+  for (const p of active) {
+    try {
+      const cmd = `node "${scriptPath}" ${p.startDate} ${p.endDate} ${p.partnerId} "${p.gids}" "${(p.product || '').replace(/"/g, '')}"`
+      console.log(`[자동업데이트] ${p.name} 업데이트 중...`)
+      execSync(cmd, { cwd: rootPath, timeout: 180000 })
+      console.log(`[자동업데이트] ${p.name} 완료`)
+    } catch (err) {
+      console.error(`[자동업데이트] ${p.name} 실패:`, err.message)
+    }
+  }
+}
+
+// 매시 20분, 50분에 실행
+const SCHEDULE_MINUTES = [20, 50]
+let lastRanMinute = -1
+
 app.listen(3001, () => {
   console.log('API 서버 실행 중: http://localhost:3001')
-  console.log('어드민 페이지에서 데이터 업데이트 버튼을 누르면 여기서 실행됩니다.')
+  console.log('어드민: http://localhost:3001/admin')
+  console.log('[자동업데이트] 매시 20분, 50분에 자동 업데이트')
+  setInterval(() => {
+    const now = new Date()
+    const min = now.getMinutes()
+    if (SCHEDULE_MINUTES.includes(min) && min !== lastRanMinute) {
+      lastRanMinute = min
+      autoUpdate()
+    }
+  }, 10000) // 10초마다 체크
 })

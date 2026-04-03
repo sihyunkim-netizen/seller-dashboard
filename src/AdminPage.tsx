@@ -36,7 +36,7 @@ export default function AdminPage() {
   const [page, setPage] = useState(1)
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/projects')
+    fetch('/data/projects.json')
       .then(r => r.json())
       .then(data => {
         if (data.ok) setProjects(data.projects)
