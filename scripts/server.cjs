@@ -133,11 +133,12 @@ async function fetchAllProjects() {
       const yearStr = (row[10] || '').trim()
       const campaignDate = (row[11] || '').trim()
       const gid = (row[13] || '').trim()
+      const category = (row[12] || '').trim()
       const manager = (row[0] || '').trim()
       const { startDate, endDate } = parseCampaignDate(campaignDate, yearStr)
       if (!partnerId || !startDate || !endDate) return null
       const key = `${partnerId}_${startDate}_${endDate}`
-      return { key, name: `${channelName} · ${product}`, channelName, product, startDate, endDate, partnerId, gids: gid, manager, email }
+      return { key, name: `${channelName} · ${product}`, channelName, product, startDate, endDate, partnerId, gids: gid, manager, email, category }
     })
     .filter(Boolean)
 }

@@ -12,6 +12,7 @@ type Project = {
   partnerId: string
   gids: string
   manager?: string
+  category?: string
 }
 
 type SellerGroup = {
@@ -130,8 +131,8 @@ export default function AdminPage() {
   return (
     <div className="admin-page">
       <header className="admin-header">
-        <h1>어드민</h1>
-        <p className="admin-sub">공동구매 진행이력 시트에서 자동으로 불러옵니다</p>
+        <h1>공동구매 셀러 대시보드 어드민 페이지</h1>
+        <p className="admin-sub">데이터 업데이트는 김시현에게 문의</p>
       </header>
 
       {/* 현재 진행중 섹션 */}
@@ -170,7 +171,8 @@ export default function AdminPage() {
                           <div className="project-name">{p.product}</div>
                           <div className="project-meta">
                             {p.startDate} ~ {p.endDate}
-                            {p.manager && ` · 담당: ${p.manager}`}
+                            {p.manager && ` · ${p.manager}`}
+                            {p.category && ` · ${p.category}`}
                             {!hasGid && <span className="no-gid"> · GID 없음</span>}
                           </div>
                         </div>
@@ -296,10 +298,6 @@ export default function AdminPage() {
         )}
       </section>
 
-      <div className="admin-notice">
-        VPN 연결 상태에서 <code>node scripts/server.cjs</code> 실행 후 사용하세요.
-        목록은 <a href="https://docs.google.com/spreadsheets/d/18rKTPqCA560cDkx-4jltuV22byBDnNuTbwkDfe_9ozk" target="_blank" rel="noreferrer">공동구매 진행이력 시트</a>에서 관리해요.
-      </div>
     </div>
   )
 }
