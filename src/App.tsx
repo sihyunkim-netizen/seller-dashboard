@@ -177,7 +177,7 @@ function MainTab({ data, hideExtras }: { data: DashboardData; hideExtras?: boole
         <StatCard label="총 예약건수" value={`${kpi.총예약건수}건`} sub="전체 기준" />
         <StatCard label="총 거래액" value={`₩${kpi.총거래액.toLocaleString()}`} sub="전체 기준" />
         <StatCard label="평균 예약단가" value={`₩${kpi.총예약건수 > 0 ? Math.round(kpi.총거래액 / kpi.총예약건수).toLocaleString() : 0}`} sub="총거래액 ÷ 총예약건수" />
-        <StatCard label="정산예정금액" value={`₩${kpi.정산예정금액.toLocaleString()}`} sub="확정 거래액의 2%" />
+        <StatCard label="정산예정금액" value={`₩${kpi.정산예정금액.toLocaleString()}`} sub="취소제외거래액의 2%" />
       </section>
 
       {/* 다음 액션 추천 */}

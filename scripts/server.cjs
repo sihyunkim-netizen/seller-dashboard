@@ -170,7 +170,15 @@ async function autoUpdate() {
   const today = new Date().toISOString().slice(0, 10)
   let projects
   try {
-    projects = await fetchAllProjects()
+    projects = await fetchAndSaveProjects()
+    // projects.json 변경사항 커밋
+    try {
+      execSync('git add public/data/projects.json && git diff --cached --quiet || git commit -m "chore: update projects.json"', { cwd: rootPath })
+      execSync('git push origin main', { cwd: rootPath })
+      console.log('[자동업데이트] projects.json 갱신 완료')
+    } catch (e) {
+      console.error('[자동업데이트] projects.json 커밋 실패:', e.message)
+    }
   } catch (err) {
     console.error('[자동업데이트] 시트 읽기 실패:', err.message)
     return
