@@ -132,7 +132,8 @@ export default function AdminPage() {
     <div className="admin-page">
       <header className="admin-header">
         <h1>공동구매 셀러 대시보드 어드민 페이지</h1>
-        <p className="admin-sub">데이터 업데이트는 김시현에게 문의</p>
+        <p className="admin-sub">현재 진행중인 프로젝트는 매시 20분, 50분에 자동 업데이트 됩니다</p>
+        <p className="admin-sub">데이터 업데이트는 <a href="https://docs.google.com/spreadsheets/d/18rKTPqCA560cDkx-4jltuV22byBDnNuTbwkDfe_9ozk/edit?gid=0#gid=0" target="_blank" rel="noreferrer">공동구매 진행이력 시트</a> 업데이트 후 김시현에게 문의</p>
       </header>
 
       {/* 현재 진행중 섹션 */}
@@ -251,7 +252,8 @@ export default function AdminPage() {
                         <div className="project-name">{p.product}</div>
                         <div className="project-meta">
                           {p.startDate} ~ {p.endDate}
-                          {p.manager && ` · 담당: ${p.manager}`}
+                          {p.manager && ` · ${p.manager}`}
+                          {p.category && ` · ${p.category}`}
                           {!hasGid && <span className="no-gid"> · GID 없음</span>}
                         </div>
                       </div>
