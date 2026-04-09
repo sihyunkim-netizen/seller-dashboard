@@ -32,15 +32,36 @@ export default function AdminPage() {
   const [updateTimes, setUpdateTimes] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem('updateTimes') || '{}') } catch { return {} }
   })
+  const [dataUpdatedAt, setDataUpdatedAt] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
   const [page, setPage] = useState(1)
 
   useEffect(() => {
-    fetch('/data/projects.json')
+    const url = window.location.hostname === 'localhost'
+      ? 'http://localhost:3001/api/projects'
+      : '/data/projects.json'
+    fetch(url)
       .then(r => r.json())
       .then(data => {
-        if (data.ok) setProjects(data.projects)
+        if (data.ok) {
+          setProjects(data.projects)
+          // 각 프로젝트 데이터 파일에서 updatedAt 읽기
+          data.projects.forEach((p: Project) => {
+            fetch(`/data/${p.key}.json`)
+              .then(r => r.json())
+              .then(d => {
+                if (d.updatedAt) {
+                  const formatted = new Date(d.updatedAt).toLocaleString('ko-KR', {
+                    year: 'numeric', month: '2-digit', day: '2-digit',
+                    hour: '2-digit', minute: '2-digit',
+                  })
+                  setDataUpdatedAt(prev => ({ ...prev, [p.key]: formatted }))
+                }
+              })
+              .catch(() => {})
+          })
+        }
         setLoadingProjects(false)
       })
       .catch(() => setLoadingProjects(false))
@@ -109,14 +130,19 @@ export default function AdminPage() {
       const data = await res.json()
       if (data.ok) {
         setUpdateStatus(s => ({ ...s, [project.key]: 'ok' }))
-        setUpdateTimes(s => {
-          const now = new Date()
-          const pad = (n: number) => String(n).padStart(2, '0')
-          const timeStr = `${now.toLocaleDateString('ko-KR')} ${pad(now.getHours())}:${pad(now.getMinutes())}`
-          const next = { ...s, [project.key]: timeStr }
-          localStorage.setItem('updateTimes', JSON.stringify(next))
-          return next
-        })
+        // 데이터 파일에서 updatedAt 다시 읽기
+        fetch(`/data/${project.key}.json`)
+          .then(r => r.json())
+          .then(d => {
+            if (d.updatedAt) {
+              const formatted = new Date(d.updatedAt).toLocaleString('ko-KR', {
+                year: 'numeric', month: '2-digit', day: '2-digit',
+                hour: '2-digit', minute: '2-digit',
+              })
+              setDataUpdatedAt(prev => ({ ...prev, [project.key]: formatted }))
+            }
+          })
+          .catch(() => {})
         setTimeout(() => setUpdateStatus(s => ({ ...s, [project.key]: 'idle' })), 3000)
       } else {
         throw new Error(data.error)
@@ -190,8 +216,8 @@ export default function AdminPage() {
                             {hasGid && status === 'ok' && '완료'}
                             {hasGid && status === 'error' && '실패 (서버 확인)'}
                           </button>
-                          {updateTimes[p.key] && (
-                            <div className="update-time">{updateTimes[p.key]}</div>
+                          {dataUpdatedAt[p.key] && (
+                            <div className="update-time">최근 업데이트: {dataUpdatedAt[p.key]}</div>
                           )}
                         </div>
                       </div>

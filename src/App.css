@@ -143,14 +143,26 @@ body {
 .action-banner {
   background: #eff6ff;
   border: 1px solid #bfdbfe;
-  border-radius: 10px;
-  padding: 14px 18px;
-  font-size: 14px;
-  color: #1d4ed8;
+  border-radius: 12px;
+  padding: 24px 28px;
   margin-bottom: 24px;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
+}
+
+.action-banner-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #1e40af;
+  margin-bottom: 4px;
+}
+
+.action-banner .action-item,
+.action-banner > div {
+  font-size: 15px;
+  color: #1d4ed8;
+  line-height: 1.6;
 }
 
 /* 차트 섹션 */

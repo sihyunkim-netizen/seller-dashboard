@@ -146,22 +146,59 @@ function MainTab({ data, hideExtras }: { data: DashboardData; hideExtras?: boole
   const firstDayCount = daily[0]?.date === data.period.start ? daily[0].예약건수 : 0
   const todayCount = fullPeriodDaily.find(d => d.date === today)?.예약건수 ?? null
 
-  // 오늘 예약 0건 (공구 기간 중일 때만)
-  if (today >= data.period.start && today <= data.period.end && todayCount === 0) {
-    actionMessages.push(`오늘 새로 들어온 예약이 없어요. 추가 콘텐츠를 발행해 유입을 늘려보세요!`)
-  }
-
-  // 마감 D-2 이내
+  const inProgress = today >= data.period.start && today <= data.period.end
+  const diffFromStart = Math.floor((new Date(today).getTime() - new Date(data.period.start).getTime()) / 86400000)
   const daysLeft = Math.ceil((new Date(data.period.end).getTime() - new Date(today).getTime()) / 86400000)
-  if (daysLeft >= 0 && daysLeft <= 2) {
-    actionMessages.push(`마감 임박 콘텐츠로 한정된 혜택임을 강조해보세요!`)
+  const isOpenPhase = inProgress && diffFromStart <= 1
+  const isClosePhase = inProgress && daysLeft >= 0 && daysLeft <= 2
+
+  // 오픈 1~2일차
+  if (isOpenPhase) {
+    if (stats?.avg첫날예약건수 != null) {
+      if (firstDayCount > stats.avg첫날예약건수) {
+        actionMessages.push('첫날 예약건수가 전체 평균보다 높아요! 좋은 출발이에요.')
+      } else {
+        actionMessages.push('첫날 예약건수가 전체 평균보다 낮아요. 스토리를 통해 오픈 소식을 꾸준히 알려보세요.')
+      }
+    }
   }
 
+  // 마감 2일전~마감일
+  if (isClosePhase) {
+    actionMessages.push('마감 임박 콘텐츠로 한정된 혜택임을 강조해보세요!')
+    const nextHundred = Math.ceil((kpi.총예약건수 + 1) / 100) * 100
+    const toNextHundred = nextHundred - kpi.총예약건수
+    if (toNextHundred > 0 && toNextHundred <= 10) {
+      actionMessages.push(`${nextHundred}건까지 ${toNextHundred}건 남았어요! 마감 전 마지막으로 한 번 더 독려해보세요`)
+    }
+  }
 
-
-  // 첫날 예약 평균 비교
-  if (stats?.avg첫날예약건수 != null && firstDayCount > stats.avg첫날예약건수) {
-    actionMessages.push(`첫날 예약건수가 전체 평균보다 높아요! 좋은 출발이에요.`)
+  // 상시
+  if (inProgress) {
+    if (todayCount === 0) {
+      actionMessages.push('오늘 새로 들어온 예약이 없어요. 추가 콘텐츠를 발행해 유입을 늘려보세요!')
+    }
+    if (kpi.총예약건수 < 100) {
+      actionMessages.push('근처 맛집 지도, 지역 여행 경비 등 나만의 여행 정보로 저장, 공유, 리그램을 유도해보세요!')
+    }
+    const recentDays = fullPeriodDaily.filter(d => d.date < today).slice(-3)
+    if (recentDays.length >= 2) {
+      const recentAvg = recentDays.reduce((s, d) => s + d.예약건수, 0) / recentDays.length
+      if (recentAvg > 0 && (todayCount ?? 0) / recentAvg <= 0.4) {
+        actionMessages.push('예약 흐름이 둔해지고 있어요. 콘텐츠 재점화 타이밍이에요!')
+      }
+    }
+    const randomPool = [
+      "'무엇이든 물어보세요' 팔로워와 소통하는 Q&A를 진행해주세요",
+      '넉넉한 예약 기간, 취소 환불 규정을 언급하며 구매 허들을 낮춰보세요',
+      '여행 타임라인을 공유하여 하루를 가득 차게 보낼 수 있는 곳임을 강조해보세요!',
+    ]
+    const seed = parseInt(today.replace(/-/g, '')) % randomPool.length
+    actionMessages.push(randomPool[seed])
+    if (stats?.avg취소율 != null && kpi.취소율 > stats.avg취소율) {
+      const diff = Math.abs(kpi.취소율 - stats.avg취소율).toFixed(1)
+      actionMessages.push(`취소율이 평균치에 비해 ${diff}%p 높아요. 추가 콘텐츠 발행으로 새로운 예약을 받아보세요.`)
+    }
   }
 
   return (
@@ -180,9 +217,10 @@ function MainTab({ data, hideExtras }: { data: DashboardData; hideExtras?: boole
         <StatCard label="정산예정금액" value={`₩${kpi.정산예정금액.toLocaleString()}`} sub="취소제외거래액의 2%" />
       </section>
 
-      {/* 다음 액션 추천 */}
+      {/* 다음 액션 코칭 */}
       {!hideExtras && actionMessages.length > 0 && (
         <div className="action-banner">
+          <div className="action-banner-title">다음 액션 코칭</div>
           {actionMessages.map((msg, i) => (
             <div key={i} className={i > 0 ? 'action-item' : ''}>💡 {msg}</div>
           ))}
@@ -192,7 +230,7 @@ function MainTab({ data, hideExtras }: { data: DashboardData; hideExtras?: boole
       {/* 예약 추이 */}
       <section className="chart-section">
         <h2 style={{ margin: '0 0 8px 0' }}>예약 추이</h2>
-        <p className="chart-insight">기간: {data.period.start} ~ {data.period.end} · 업데이트: {new Date(data.updatedAt).toLocaleDateString('ko-KR')}</p>
+        <p className="chart-insight">업데이트: {new Date(data.updatedAt).toLocaleString('ko-KR', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</p>
         <ResponsiveContainer width="100%" height={400}>
           <LineChart data={fullPeriodHourly} margin={{ top: 8, right: 24, left: 0, bottom: 0 }}>
             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
