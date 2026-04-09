@@ -29,9 +29,6 @@ export default function AdminPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loadingProjects, setLoadingProjects] = useState(true)
   const [updateStatus, setUpdateStatus] = useState<Record<string, 'idle' | 'loading' | 'ok' | 'error'>>({})
-  const [updateTimes, setUpdateTimes] = useState<Record<string, string>>(() => {
-    try { return JSON.parse(localStorage.getItem('updateTimes') || '{}') } catch { return {} }
-  })
   const [dataUpdatedAt, setDataUpdatedAt] = useState<Record<string, string>>({})
   const [search, setSearch] = useState('')
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({})
