@@ -293,8 +293,8 @@ export default function AdminPage() {
                           {hasGid && status === 'ok' && '완료'}
                           {hasGid && status === 'error' && '실패 (서버 확인)'}
                         </button>
-                        {updateTimes[p.key] && (
-                          <div className="update-time">{updateTimes[p.key]}</div>
+                        {dataUpdatedAt[p.key] && (
+                          <div className="update-time">최근 업데이트: {dataUpdatedAt[p.key]}</div>
                         )}
                       </div>
                     </div>
